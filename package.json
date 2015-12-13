@@ -4,7 +4,7 @@
   "description": "Library to connect with MPD.",
   "main": "index.js",
   "bin": {
-    "node-mpc-console": "console.js"
+    "rdcl-mpc": "console.js"
   },
   "scripts": {
     "console": "node console",
