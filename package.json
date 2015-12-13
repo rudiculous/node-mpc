@@ -1,0 +1,26 @@
+{
+  "name": "@rdcl/mpc",
+  "version": "1.0.0",
+  "description": "Library to connect with MPD.",
+  "main": "index.js",
+  "scripts": {
+    "cover": "istanbul cover _mocha -- -R spec test/*",
+    "test": "mocha --reporter spec"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rudiculous/node-mpc.git"
+  },
+  "author": "RJ van der Weide <rj@rdcl.nl> (https://rdcl.nl/)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rudiculous/node-mpc/issues"
+  },
+  "homepage": "https://github.com/rudiculous/node-mpc#readme",
+  "devDependencies": {
+    "chai": "^3.4.1",
+    "coveralls": "^2.11.6",
+    "istanbul": "^0.4.1",
+    "mocha": "^2.3.4"
+  }
+}
