@@ -39,7 +39,62 @@ describe('#MPClient', function () {
   registerTest()
   it('can send commands to MPD', function (done) {
     mpc.then(mpc => {
-      mpc.command('play')
+      mpc.command('play').then(response => {
+        expect(response).to.deep.equal({
+          data: {},
+          status: 'OK',
+          full: 'OK\n',
+        })
+
+        done()
+        endTest()
+      })
+    })
+  })
+
+  registerTest()
+  it('goes into idle mode when receiving the "idle" command', function (done) {
+    mpc.then(mpc => {
+      mpc.events.once('data', data => {
+        expect(data).to.deep.equal({
+          data: {
+            changed: ['player', 'mixer', 'database'],
+          },
+          status: 'OK',
+          full: 'changed: player\nchanged: mixer\nchanged: database\nOK\n',
+        })
+
+        done()
+        endTest()
+      })
+
+      mpc.command('idle')
+    })
+  })
+
+  registerTest()
+  it('goes out of idle mode when receiving the "noidle" command.', function (done) {
+    mpc.then(mpc => {
+      mpc.command('idle')
+        .then(() => mpc.command('noidle'))
+        .then(response => {
+          expect(response).to.deep.equal({
+            data: {},
+            status: 'OK',
+            full: 'OK\n',
+          })
+
+          done()
+          endTest()
+        })
+    })
+  })
+
+  registerTest()
+  it('leaves idle mode when receiving a command', function (done) {
+    mpc.then(mpc => {
+      mpc.command('idle')
+        .then(() => mpc.command('play'))
         .then(response => {
           expect(response).to.deep.equal({
             data: {},
@@ -56,40 +111,38 @@ describe('#MPClient', function () {
   registerTest()
   it('can handle an ACK response by MPD', function (done) {
     mpc.then(mpc => {
-      mpc.command('toggle')
-        .catch(err => {
-          expect(err).to.deep.equal({
-            data: {},
-            status: 'ACK',
-            full: 'ACK\n',
-          })
-
-          done()
-          endTest()
+      mpc.command('toggle').catch(err => {
+        expect(err).to.deep.equal({
+          data: {},
+          status: 'ACK',
+          full: 'ACK\n',
         })
+
+        done()
+        endTest()
+      })
     })
   })
 
   registerTest()
   it('can parse responses from MPD that contain data', function (done) {
     mpc.then(mpc => {
-      mpc.command('status')
-        .then(response => {
-          expect(response).to.deep.equal({
-            data: {
-              'foo000': 'bar',
-              'foo001': 'bar',
-              'foo002': 'bar',
-              'foo003': 'bar',
-              'foo004': 'bar',
-            },
-            status: 'OK',
-            full: 'foo000: bar\nfoo001: bar\nfoo002: bar\nfoo003: bar\nfoo004: bar\nOK\n',
-          })
-
-          done()
-          endTest()
+      mpc.command('status').then(response => {
+        expect(response).to.deep.equal({
+          data: {
+            'foo000': 'bar',
+            'foo001': 'bar',
+            'foo002': 'bar',
+            'foo003': 'bar',
+            'foo004': 'bar',
+          },
+          status: 'OK',
+          full: 'foo000: bar\nfoo001: bar\nfoo002: bar\nfoo003: bar\nfoo004: bar\nOK\n',
         })
+
+        done()
+        endTest()
+      })
     })
   })
 
@@ -100,12 +153,10 @@ describe('#MPClient', function () {
       mpc.disconnect()
 
       mpc.connect()
+        .then(() => mpc.connect())
         .then(() => {
-          mpc.connect()
-            .then(() => {
-              done()
-              endTest()
-            })
+          done()
+          endTest()
         })
     })
   })
@@ -116,14 +167,11 @@ describe('#MPClient', function () {
       mpc.disconnect()
 
       mpc.command('play')
-        .catch(err => {
-          expect(err.message).to.equal('No active connection to write to.')
-
-          mpc.connect()
-            .then(() => {
-              done()
-              endTest()
-            })
+        .catch(err => expect(err.message).to.equal('No active connection to write to.'))
+        .then(() => mpc.connect())
+        .then(() => {
+          done()
+          endTest()
         })
     })
   })
@@ -131,18 +179,16 @@ describe('#MPClient', function () {
   registerTest()
   it('still gives a response if MPD gives an unexpected answer', function (done) {
     mpc.then(mpc => {
-      mpc.command('statusfail')
-        .then(response => {
-          console.log(response)
-          expect(response).to.deep.equal({
-            data: {},
-            status: 'OK',
-            full: 'foo000: bar\n\nfoo001:bar\nfoo002: bar\nOK\n',
-          })
-
-          done()
-          endTest()
+      mpc.command('statusfail').then(response => {
+        expect(response).to.deep.equal({
+          data: {},
+          status: 'OK',
+          full: 'foo000: bar\n\nfoo001:bar\nfoo002: bar\nOK\n',
         })
+
+        done()
+        endTest()
+      })
     })
   })
 
@@ -154,6 +200,8 @@ function getMockServer() {
     const server = net.createServer(function handler(client) {
     })
 
+    let idle = null
+
     server.on('error', reject)
     server.listen(function ready() {
       resolve(server)
@@ -164,32 +212,49 @@ function getMockServer() {
       socket.setEncoding('utf8')
 
       socket.on('data', data => {
-        if (data === 'play\n') {
-          socket.write('OK\n')
-        }
-        else if (data == 'status\n') {
-          const lines = [
-            'foo000: bar',
-            'foo001: bar',
-            'foo002: bar',
-            'foo003: bar',
-            'foo004: bar',
-          ]
+        for (let command of data.split(/\n/)) {
+          if (!command) continue
 
-          socket.write(lines.join('\n') + '\nOK\n')
-        }
-        else if (data == 'statusfail\n') {
-          const lines = [
-            'foo000: bar',
-            '',
-            'foo001:bar',
-            'foo002: bar',
-          ]
+          if (command === 'play') {
+            socket.write('OK\n')
+          }
+          else if (command === 'idle') {
+            idle = setTimeout(function () {
+              idle = null
+              socket.write('changed: player\nchanged: mixer\nchanged: database\nOK\n')
+            }, 30)
+          }
+          else if (command === 'noidle') {
+            if (idle != null) {
+              clearTimeout(idle)
+              idle = null
+            }
+            socket.write('OK\n')
+          }
+          else if (command == 'status') {
+            const lines = [
+              'foo000: bar',
+              'foo001: bar',
+              'foo002: bar',
+              'foo003: bar',
+              'foo004: bar',
+            ]
 
-          socket.write(lines.join('\n') + '\nOK\n')
-        }
-        else {
-          socket.write('ACK\n')
+            socket.write(lines.join('\n') + '\nOK\n')
+          }
+          else if (command == 'statusfail') {
+            const lines = [
+              'foo000: bar',
+              '',
+              'foo001:bar',
+              'foo002: bar',
+            ]
+
+            socket.write(lines.join('\n') + '\nOK\n')
+          }
+          else {
+            socket.write('ACK\n')
+          }
         }
       })
     })

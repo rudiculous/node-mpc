@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "Library to connect with MPD.",
   "main": "index.js",
+  "bin": {
+    "node-mpc-console": "console.js"
+  },
   "scripts": {
+    "console": "node console",
     "cover": "istanbul cover _mocha -- -R spec test/*",
     "test": "mocha --reporter spec"
   },
@@ -21,6 +25,7 @@
     "chai": "^3.4.1",
     "coveralls": "^2.11.6",
     "istanbul": "^0.4.1",
-    "mocha": "^2.3.4"
+    "mocha": "^2.3.4",
+    "yargs": "^3.31.0"
   }
 }

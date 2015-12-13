@@ -4,6 +4,7 @@ const events = require('events')
 const net = require('net')
 
 const $client = Symbol('client')
+const $isIdle = Symbol('isIdle')
 const $netOpts = Symbol('netOpts')
 const $queue = Symbol('queue')
 
@@ -17,6 +18,7 @@ class MPClient {
    */
   constructor(netOpts) {
     this[$client] = null
+    this[$isIdle] = false
     this[$netOpts] = netOpts
     this[$queue] = []
 
@@ -49,6 +51,7 @@ class MPClient {
 
       let buffer = ''
       this[$client].on('data', (data) => {
+        this[$isIdle] = false
         data = buffer + data
         buffer = ''
 
@@ -71,8 +74,6 @@ class MPClient {
               const response = _parseResponse(buffer, line)
               buffer = ''
 
-              this.events.emit('response', response)
-
               if (this[$queue].length) {
                 // TODO (es6): const [resolve, reject] = this[$queue].shift()
                 const cbs = this[$queue].shift()
@@ -85,6 +86,9 @@ class MPClient {
                 else {
                   reject(response)
                 }
+              }
+              else {
+                this.events.emit('data', response)
               }
             }
           }
@@ -126,7 +130,28 @@ class MPClient {
       // TODO: Is there a possibility that this could insert commands in
       //       the queue in the wrong order?
       // TODO: Should we apply escaping to `command`?
-      this[$client].write(command + '\n', 'utf8', () => this[$queue].push([resolve, reject]))
+
+      const execute = () => {
+        if (command === 'idle') {
+          this[$client].write(command + '\n', 'utf8', () => {
+            this[$isIdle] = true
+            resolve()
+          })
+        }
+        else {
+          this[$client].write(command + '\n', 'utf8', () => this[$queue].push([resolve, reject]))
+        }
+      }
+
+      if (this[$isIdle] && command !== 'noidle') {
+        this[$client].write('noidle\n', 'utf8', () => {
+          this[$queue].push([() => {}, () => {}])
+          execute()
+        })
+      }
+      else {
+        execute()
+      }
     })
   }
 
@@ -150,13 +175,23 @@ function _parseResponse(contents, status) {
       if (!line) continue
 
       const i = line.indexOf(': ')
-
       if (i === -1) {
         data = {}
         break
       }
 
-      data[line.substring(0, i)] = line.substring(i + 2)
+      const key = line.substring(0, i)
+      const val = line.substring(i + 2)
+
+      if (data[key] == null) {
+        data[key] = val
+      }
+      else if (Array.isArray(data[key])) {
+        data[key].push(val)
+      }
+      else {
+        data[key] = [data[key], val]
+      }
     }
   }
 
