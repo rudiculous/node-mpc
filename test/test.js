@@ -33,6 +33,9 @@ describe('#MPClient', function () {
     mpc.then(mpc => {
       done()
       endTest()
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
@@ -48,7 +51,13 @@ describe('#MPClient', function () {
 
         done()
         endTest()
+      }).catch(err => {
+        done(err)
+        endTest()
       })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
@@ -68,7 +77,13 @@ describe('#MPClient', function () {
         endTest()
       })
 
-      mpc.command('idle')
+      mpc.command('idle').catch(err => {
+        done(err)
+        endTest()
+      })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
@@ -87,6 +102,13 @@ describe('#MPClient', function () {
           done()
           endTest()
         })
+        .catch(err => {
+          done(err)
+          endTest()
+        })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
@@ -105,44 +127,67 @@ describe('#MPClient', function () {
           done()
           endTest()
         })
+        .catch(err => {
+          done(err)
+          endTest()
+        })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
   registerTest()
   it('can handle an ACK response by MPD', function (done) {
     mpc.then(mpc => {
-      mpc.command('toggle').catch(err => {
-        expect(err).to.deep.equal({
-          data: {},
-          status: 'ACK',
-          full: 'ACK\n',
+      mpc.command('toggle')
+        .then(response => {
+          done(new Error('Received OK, expected ACK'))
+          endTest()
         })
+        .catch(err => {
+          expect(err).to.deep.equal({
+            data: {},
+            status: 'ACK',
+            full: 'ACK\n',
+          })
 
-        done()
-        endTest()
-      })
+          done()
+          endTest()
+        })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
   registerTest()
   it('can parse responses from MPD that contain data', function (done) {
     mpc.then(mpc => {
-      mpc.command('status').then(response => {
-        expect(response).to.deep.equal({
-          data: {
-            'foo000': 'bar',
-            'foo001': 'bar',
-            'foo002': 'bar',
-            'foo003': 'bar',
-            'foo004': 'bar',
-          },
-          status: 'OK',
-          full: 'foo000: bar\nfoo001: bar\nfoo002: bar\nfoo003: bar\nfoo004: bar\nOK\n',
-        })
+      mpc.command('status')
+        .then(response => {
+          expect(response).to.deep.equal({
+            data: {
+              'foo000': 'bar',
+              'foo001': 'bar',
+              'foo002': 'bar',
+              'foo003': 'bar',
+              'foo004': 'bar',
+            },
+            status: 'OK',
+            full: 'foo000: bar\nfoo001: bar\nfoo002: bar\nfoo003: bar\nfoo004: bar\nOK\n',
+          })
 
-        done()
-        endTest()
-      })
+          done()
+          endTest()
+        })
+        .catch(err => {
+          done(err)
+          endTest()
+        })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
@@ -158,6 +203,13 @@ describe('#MPClient', function () {
           done()
           endTest()
         })
+        .catch(err => {
+          done(err)
+          endTest()
+        })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
@@ -167,28 +219,47 @@ describe('#MPClient', function () {
       mpc.disconnect()
 
       mpc.command('play')
+        .then(response => {
+          done(new Error('Received OK, expected connection error'))
+          endTest()
+        })
         .catch(err => expect(err.message).to.equal('No active connection to write to.'))
         .then(() => mpc.connect())
         .then(() => {
           done()
           endTest()
         })
+        .catch(err => {
+          done(err)
+          endTest()
+        })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
   registerTest()
   it('still gives a response if MPD gives an unexpected answer', function (done) {
     mpc.then(mpc => {
-      mpc.command('statusfail').then(response => {
-        expect(response).to.deep.equal({
-          data: {},
-          status: 'OK',
-          full: 'foo000: bar\n\nfoo001:bar\nfoo002: bar\nOK\n',
-        })
+      mpc.command('statusfail')
+        .then(response => {
+          expect(response).to.deep.equal({
+            data: {},
+            status: 'OK',
+            full: 'foo000: bar\n\nfoo001:bar\nfoo002: bar\nOK\n',
+          })
 
-        done()
-        endTest()
-      })
+          done()
+          endTest()
+        })
+        .catch(err => {
+          done(err)
+          endTest()
+        })
+    }).catch(err => {
+      done(err)
+      endTest()
     })
   })
 
@@ -270,7 +341,7 @@ function endTest() {
 
   if (nrTests < 1) {
     console.log('All tests have been completed, closing the mock server.')
-    mpc.disonnect()
+    mpc.then(mpc => mpc.disconnect())
     mockServer.then(server => server.close())
   }
 }
