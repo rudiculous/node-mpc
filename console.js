@@ -37,20 +37,27 @@ const rl = readline.createInterface({
   completer: completer,
 })
 
+let autoidle = true
+
 rl.on('close', () => mpc.disconnect())
 rl.on('line', (command) => {
   if (command === '') {
-    rl.prompt()
+    prompt()
   }
   else if (command.startsWith('/')) {
+    const args = command.split(' ')
+    command = args.shift()
+
     if (command === '/exit') {
       rl.close()
     }
-    else if (command === '/help' || command === '?') {
+    else if (command === '/help') {
       console.log([
         'General:',
         '  /help       - Shows this message.',
         '  /exit       - Exits.',
+        '  /autoidle   - Toggles audo idle. When auto idle is active,',
+        '                the idle command is sent after each command.',
         '',
         'Connection:',
         '  /connect    - Connect to the MPD server.',
@@ -59,24 +66,43 @@ rl.on('line', (command) => {
         'See http://www.musicpd.org/doc/protocol/command_reference.html',
         'for the full MPD command reference.',
       ].join('\n'))
-      rl.prompt()
+      prompt()
+    }
+    else if (command === '/autoidle') {
+      if (args.length) {
+        if (args[0] === '0') {
+          autoidle = false
+        }
+        else if (args[0] === '1') {
+          autoidle = true
+        }
+        else {
+          console.error('Invalid argument provided for /autoidle:', args)
+        }
+      }
+      else {
+        autoidle = !autoidle
+      }
+
+      console.log('Autoidle is now', autoidle ? 'on' : 'off')
+      prompt()
     }
     else if (command === '/connect') {
       mpc.connect().then(res => {
         console.log(trim(res))
-        rl.prompt()
+        prompt()
       }).catch(err => {
         console.error(trim(err))
-        rl.prompt()
+        prompt()
       })
     }
     else if (command == '/disconnect') {
       mpc.disconnect()
-      rl.prompt()
+      prompt()
     }
     else {
       console.error('Unknown command: "%s"', command)
-      rl.prompt()
+      prompt()
     }
   }
   else {
@@ -84,10 +110,10 @@ rl.on('line', (command) => {
       if (res && res.full != null) {
         console.log(trim(res.full))
       }
-      rl.prompt()
+      prompt()
     }).catch(err => {
       console.error(trim(err.full || err))
-      rl.prompt()
+      prompt()
     })
   }
 })
@@ -96,12 +122,15 @@ mpc.events.on('data', (data) => {
   process.stdout.clearLine()
   process.stdout.cursorTo(0)
   console.log(trim(data.full || data))
-  rl.prompt(true)
+  prompt(true)
 })
 
-console.log('@rdcl/mpc prompt (%s)\nType "/help" for help.\n', pjson.version)
+console.log(
+  '@rdcl/mpc prompt (%s)\nType "/help" for help.\n',
+  pjson.version
+)
 rl.setPrompt('> ')
-rl.prompt()
+prompt()
 
 
 function trim(str) {
@@ -112,10 +141,23 @@ function trim(str) {
   return str
 }
 
+function prompt(preserveCursor) {
+  if (autoidle) {
+    mpc.command('idle')
+  }
+
+  if (preserveCursor == null) {
+    rl.prompt()
+  }
+  else {
+    rl.prompt(preserveCursor)
+  }
+}
+
 function completer(line) {
   const possibilities = []
 
-  for (const possibility of ['/help', '/connect', '/disconnect', '/exit']) {
+  for (const possibility of ['/help', '/connect', '/disconnect', '/exit', '/autoidle']) {
     if (possibility.startsWith(line)) {
       possibilities.push(possibility)
     }
