@@ -63,6 +63,8 @@ describe('#MPClient', function () {
 
   registerTest()
   it('goes into idle mode when receiving the "idle" command', function (done) {
+    this.timeout(10000)
+
     mpc.then(mpc => {
       mpc.events.once('data', data => {
         expect(data).to.deep.equal({
@@ -293,7 +295,7 @@ function getMockServer() {
             idle = setTimeout(function () {
               idle = null
               socket.write('changed: player\nchanged: mixer\nchanged: database\nOK\n')
-            }, 30)
+            }, 500)
           }
           else if (command === 'noidle') {
             if (idle != null) {
