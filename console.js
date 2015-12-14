@@ -4,6 +4,8 @@
 const pjson = require('./package.json')
 
 const readline = require('readline')
+const util = require('util')
+const chalk = require('chalk')
 
 const argv = require('yargs')
   .usage('Usage: $0 [options]')
@@ -40,6 +42,7 @@ const rl = readline.createInterface({
 })
 
 let autoidle = true
+let commandList = null
 
 rl.on('close', () => mpc.disconnect())
 rl.on('line', (command) => {
@@ -54,21 +57,58 @@ rl.on('line', (command) => {
       rl.close()
     }
     else if (command === '/help') {
-      console.log([
+      printOut([
         'General:',
-        '  /help       - Shows this message.',
-        '  /exit       - Exits.',
-        '  /autoidle   - Toggles audo idle. When auto idle is active,',
-        '                the idle command is sent after each command.',
+        '  /help           - Shows this message.',
+        '  /exit           - Exits.',
+        '  /autoidle [0|1] - Toggles audo idle. When auto idle is active,',
+        '                    the idle command is sent after each command.',
         '',
         'Connection:',
-        '  /connect    - Connect to the MPD server.',
-        '  /disconnect - Disconnect from the MPD server.',
+        '  /connect        - Connect to the MPD server.',
+        '  /disconnect     - Disconnect from the MPD server.',
+        '',
+        'Special commands:',
+        '  /startlist      - Starts collecting commands for a command',
+        '                    list.',
+        '  /endlist [0|1]  - Ends collecting commands for a command list.',
+        '                    Accepts one optional argument which',
+        '                    specifies whether command_list_begin or',
+        '                    command_list_ok_begin should be used',
         '',
         'See http://www.musicpd.org/doc/protocol/command_reference.html',
         'for the full MPD command reference.',
       ].join('\n'))
       prompt()
+    }
+    else if (command === '/startlist') {
+      if (commandList != null) {
+        printOut('Already collecting commands. End the previous list with /endlist.')
+      }
+      else {
+        commandList = []
+      }
+
+      prompt()
+    }
+    else if (command === '/endlist') {
+      if (commandList == null) {
+        printOut('Not collecting commands. Start collecting with /startlist.')
+        prompt()
+      }
+      else {
+        mpc.commandList(commandList, !args.length || args[0] === '1').then(res => {
+          if (res && res.full != null) {
+            printOut(res.full)
+          }
+          commandList = null
+          prompt()
+        }).catch(err => {
+          printErr(err.full || err)
+          commandList = null
+          prompt()
+        })
+      }
     }
     else if (command === '/autoidle') {
       if (args.length) {
@@ -79,22 +119,22 @@ rl.on('line', (command) => {
           autoidle = true
         }
         else {
-          console.error('Invalid argument provided for /autoidle:', args)
+          printOut('Invalid argument provided for /autoidle:', args)
         }
       }
       else {
         autoidle = !autoidle
       }
 
-      console.log('Autoidle is now', autoidle ? 'on' : 'off')
+      printOut('Autoidle is now', autoidle ? 'on' : 'off')
       prompt()
     }
     else if (command === '/connect') {
       mpc.connect().then(res => {
-        console.log(trim(res))
+        printOut(res)
         prompt()
       }).catch(err => {
-        console.error(trim(err))
+        printErr(err)
         prompt()
       })
     }
@@ -103,27 +143,33 @@ rl.on('line', (command) => {
       prompt()
     }
     else {
-      console.error('Unknown command: "%s"', command)
+      printOut('Unknown command: "%s"', command)
       prompt()
     }
   }
   else {
-    mpc.command(command).then(res => {
-      if (res && res.full != null) {
-        console.log(trim(res.full))
-      }
+    if (commandList != null) {
+      commandList.push(command)
       prompt()
-    }).catch(err => {
-      console.error(trim(err.full || err))
-      prompt()
-    })
+    }
+    else {
+      mpc.command(command).then(res => {
+        if (res && res.full != null) {
+          printOut(res.full)
+        }
+        prompt()
+      }).catch(err => {
+        printErr(err.full || err)
+        prompt()
+      })
+    }
   }
 })
 
 mpc.events.on('data', (data) => {
   process.stdout.clearLine()
   process.stdout.cursorTo(0)
-  console.log(trim(data.full || data))
+  printOut(data.full || data)
   prompt(true)
 })
 
@@ -131,16 +177,42 @@ console.log(
   '@rdcl/mpc prompt (%s)\nType "/help" for help.\n',
   pjson.version
 )
-rl.setPrompt('> ')
 prompt()
 
 
-function trim(str) {
-  if (typeof(str) === 'string' && str.endsWith('\n')) {
-    return str.substring(0, str.length - 1)
+function printOut(message) {
+  message = util.format.apply(util, arguments)
+
+  if (message.endsWith('\n')) {
+    message = message.substring(0, message.length - 1)
   }
 
-  return str
+  message = message.split('\n')
+  for (let i = 0, len = message.length; i < len; i += 1) {
+    if (message[i].startsWith('OK MPD')) {
+      message[i] = chalk.yellow(message[i])
+    }
+    else if (message[i].startsWith('OK')) {
+      message[i] = chalk.green(message[i])
+    }
+    else if (message[i].startsWith('list_OK')) {
+      message[i] = chalk.cyan(message[i])
+    }
+    else if (message[i].startsWith('ACK')) {
+      message[i] = chalk.red(message[i])
+    }
+  }
+
+  message = message.join('\n')
+
+  console.log(message)
+}
+
+function printErr(message) {
+  message = util.format.apply(util, arguments)
+  message = chalk.red(message)
+
+  console.error(message)
 }
 
 function prompt(preserveCursor) {
@@ -153,7 +225,7 @@ function prompt(preserveCursor) {
       rl.prompt.apply(rl, arguments)
     })
     .catch(err => {
-      console.error(err)
+      printErr(err)
       rl.prompt.apply(rl, arguments)
     })
 }
@@ -166,6 +238,8 @@ function completer(line) {
     '/disconnect',
     '/exit',
     '/autoidle',
+    '/startlist',
+    '/endlist',
   ]
 
   for (const possibility of commands) {

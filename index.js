@@ -136,6 +136,12 @@ class MPClient {
         return
       }
 
+      if (this[$isIdle] && command === 'idle') {
+        // Already idle, nothing to do.
+        resolve()
+        return
+      }
+
       // TODO: Is there a possibility that this could insert commands in
       //       the queue in the wrong order?
       // TODO: Should we apply escaping to `command`?
@@ -160,6 +166,65 @@ class MPClient {
         else {
           that[$client].write(command + '\n', 'utf8', () => that[$queue].push([resolve, reject]))
         }
+      }
+    })
+  }
+
+  /**
+   * Sends a list of commands to MPD, using command_list_begin.
+   *
+   * @param {Array}   commands      The commands to execute.
+   * @param {Boolean} [listOk=true] If true, command_list_ok_begin is used.
+   * @return {Promise}
+   *
+   * @see http://www.musicpd.org/doc/protocol/command_lists.html
+   */
+  commandList(commands, listOk) {
+    if (listOk == null) listOk = true
+
+    return new Promise((resolve, reject) => {
+      if (!this.isConnected()) {
+        reject(new Error('No active connection to write to.'))
+        return
+      }
+
+      // TODO: Is there a possibility that this could insert commands in
+      //       the queue in the wrong order?
+      // TODO: Should we apply escaping to `command`?
+
+      const list = [listOk ? 'command_list_ok_begin\n' : 'command_list_begin\n']
+
+      for (const command of commands) {
+        list.push(command + '\n')
+      }
+
+      list.push('command_list_end\n')
+
+      const that = this
+      let i = 0
+      const len = list.length
+
+      if (this[$isIdle]) {
+        this.command('noidle')
+          .then(() => executeNext())
+          .catch(err => reject(err))
+      }
+      else {
+        executeNext()
+      }
+
+      function executeNext() {
+        const command = list[i]
+        i += 1
+
+        that[$client].write(command, 'utf8', () => {
+          if (i < len) {
+            executeNext()
+          }
+          else {
+            that[$queue].push([resolve, reject])
+          }
+        })
       }
     })
   }
