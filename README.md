@@ -9,7 +9,12 @@ Library to connect with MPD.
 ##  Installation
 `npm install @rdcl/mpc`
 
-## Usage
+
+## Usage (console)
+Run `rdcl-mpc`. See `rdcl-mpc --help` for all the command line options.
+
+
+## Usage (library)
 ```javascript
 const MPC = require('@rdcl/mpc')
 const mpc = new MPC({ port: 6600 })
@@ -20,6 +25,7 @@ mpc.connect()
 
 ## Tests
 `npm test`
+There is still a lot of room for improvement, so feel free to help.
 
 
 [npm-image]: https://img.shields.io/npm/v/@rdcl/mpc.svg?style=flat-square
