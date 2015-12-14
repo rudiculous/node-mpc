@@ -31,6 +31,8 @@ else {
 const MPClient = require('.')
 const mpc = new MPClient(netOpts)
 
+const dummyPromise = new Promise(resolve => resolve())
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -142,22 +144,31 @@ function trim(str) {
 }
 
 function prompt(preserveCursor) {
-  if (autoidle) {
-    mpc.command('idle')
-  }
+  const promise = autoidle && mpc.isConnected()
+    ? mpc.command('idle')
+    : dummyPromise
 
-  if (preserveCursor == null) {
-    rl.prompt()
-  }
-  else {
-    rl.prompt(preserveCursor)
-  }
+  return promise
+    .then(() => {
+      rl.prompt.apply(rl, arguments)
+    })
+    .catch(err => {
+      console.error(err)
+      rl.prompt.apply(rl, arguments)
+    })
 }
 
 function completer(line) {
   const possibilities = []
+  const commands = [
+    '/help',
+    '/connect',
+    '/disconnect',
+    '/exit',
+    '/autoidle',
+  ]
 
-  for (const possibility of ['/help', '/connect', '/disconnect', '/exit', '/autoidle']) {
+  for (const possibility of commands) {
     if (possibility.startsWith(line)) {
       possibilities.push(possibility)
     }

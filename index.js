@@ -31,6 +31,15 @@ class MPClient {
   }
 
   /**
+   * Checks if currently connected to the MPD server.
+   *
+   * @return {Boolean}
+   */
+  isConnected() {
+    return this[$client] != null
+  }
+
+  /**
    * Connects to the MPD server.
    *
    * If already connected, the existing connection is ended first.
@@ -40,7 +49,7 @@ class MPClient {
   connect() {
     return new Promise((resolve, reject) => {
       // clean up the old client
-      if (this[$client] != null) {
+      if (this.isConnected()) {
         this.disconnect()
       }
 
@@ -106,7 +115,7 @@ class MPClient {
    * Ends the current connection.
    */
   disconnect() {
-    if (this[$client] != null) {
+    if (this.isConnected()) {
       this[$client].end()
       this[$client] = null
     }
@@ -122,7 +131,7 @@ class MPClient {
    */
   command(command) {
     return new Promise((resolve, reject) => {
-      if (this[$client] == null) {
+      if (!this.isConnected()) {
         reject(new Error('No active connection to write to.'))
         return
       }
@@ -131,26 +140,26 @@ class MPClient {
       //       the queue in the wrong order?
       // TODO: Should we apply escaping to `command`?
 
-      const execute = () => {
-        if (command === 'idle') {
-          this[$client].write(command + '\n', 'utf8', () => {
-            this[$isIdle] = true
-            resolve()
-          })
-        }
-        else {
-          this[$client].write(command + '\n', 'utf8', () => this[$queue].push([resolve, reject]))
-        }
-      }
-
+      const that = this
       if (this[$isIdle] && command !== 'noidle') {
         this[$client].write('noidle\n', 'utf8', () => {
-          this[$queue].push([() => {}, () => {}])
-          execute()
+          this[$queue].push([execute, execute])
         })
       }
       else {
         execute()
+      }
+
+      function execute() {
+        if (command === 'idle') {
+          that[$client].write(command + '\n', 'utf8', () => {
+            that[$isIdle] = true
+            resolve()
+          })
+        }
+        else {
+          that[$client].write(command + '\n', 'utf8', () => that[$queue].push([resolve, reject]))
+        }
       }
     })
   }
