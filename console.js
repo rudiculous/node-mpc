@@ -127,7 +127,11 @@ const commands = {
         prompt()
       }
       else {
-        mpc.commandList(commandList, ok == null || ok).then(res => {
+        const promise = ok == null
+          ? mpc.commandList(commandList)
+          : mpc.commandList(commandList, ok)
+
+        promise.then(res => {
           if (res && res.full != null) {
             printOut(res.full)
           }
