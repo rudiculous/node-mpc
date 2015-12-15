@@ -253,6 +253,11 @@ function printOut(message) {
 
 function printErr(message) {
   message = util.format.apply(util, arguments)
+
+  if (message.endsWith('\n')) {
+    message = message.substring(0, message.length - 1)
+  }
+
   message = chalk.red(message)
 
   console.error(message)
