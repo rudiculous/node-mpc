@@ -36,7 +36,7 @@ class MPClient {
    * @return {Boolean}
    */
   isConnected() {
-    return this[$client] != null
+    return this[$client] != null && this[$client].readyState !== 'closed'
   }
 
   /**
@@ -56,7 +56,8 @@ class MPClient {
       this[$client] = net.connect(this[$netOpts], () => this.events.on('ready', resolve))
       this[$client].setEncoding('utf8')
 
-      this[$client].on('error', (err) => this.events.emit(err))
+      this[$client].on('end', () => this.events.emit('end'))
+      this[$client].on('error', (err) => this.events.emit('error', err))
 
       let buffer = ''
       this[$client].on('data', (data) => {
