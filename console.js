@@ -118,15 +118,15 @@ const commands = {
   endlist: {
     description: 'Ends collecting commands for a command list. Accepts one optional argument which specifies whether command_list_begin or command_list_ok_begin should be used.',
     args: [Boolean],
-    action(ok) {
+    action(listOk) {
       if (commandList == null) {
         printOut('Not collecting commands. Start collecting with /startlist.')
         prompt()
       }
       else {
-        const promise = ok == null
+        const promise = listOk == null
           ? mpc.commandList(commandList)
-          : mpc.commandList(commandList, ok)
+          : mpc.commandList(commandList, listOk)
 
         promise.then(res => {
           if (res && res.full != null) {
