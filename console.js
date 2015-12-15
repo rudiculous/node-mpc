@@ -44,60 +44,90 @@ const rl = readline.createInterface({
 let autoidle = true
 let commandList = null
 
-rl.on('close', () => mpc.disconnect())
-rl.on('line', (command) => {
-  if (command === '') {
-    prompt()
-  }
-  else if (command.startsWith('/')) {
-    const args = command.split(' ')
-    command = args.shift()
-
-    if (command === '/exit') {
-      rl.close()
-    }
-    else if (command === '/help') {
-      printOut([
-        'General:',
-        '  /help           - Shows this message.',
-        '  /exit           - Exits.',
-        '  /autoidle [0|1] - Toggles audo idle. When auto idle is active,',
-        '                    the idle command is sent after each command.',
-        '',
-        'Connection:',
-        '  /connect        - Connect to the MPD server.',
-        '  /disconnect     - Disconnect from the MPD server.',
-        '',
-        'Special commands:',
-        '  /startlist      - Starts collecting commands for a command',
-        '                    list.',
-        '  /endlist [0|1]  - Ends collecting commands for a command list.',
-        '                    Accepts one optional argument which',
-        '                    specifies whether command_list_begin or',
-        '                    command_list_ok_begin should be used',
-        '',
-        'See http://www.musicpd.org/doc/protocol/command_reference.html',
-        'for the full MPD command reference.',
-      ].join('\n'))
+const commandGroups = [
+  {
+    name: 'General',
+    commands: ['help', 'exit', 'autoidle'],
+  },
+  {
+    name: 'Connection',
+    commands: ['connect', 'disconnect'],
+  },
+  {
+    name: 'Special commands',
+    commands: ['startlist', 'endlist'],
+  },
+]
+const commands = {
+  help: {
+    description: 'Shows this message.',
+    action() {
+      printHelp()
       prompt()
-    }
-    else if (command === '/startlist') {
+    },
+  },
+  exit: {
+    description: 'Exits.',
+    action() {
+      rl.close()
+    },
+  },
+  autoidle: {
+    description: 'Toggles audo idle. When auto idle is active, the idle command is sent after each command.',
+    args: [Boolean],
+    action(status) {
+      if (status != null) {
+        autoidle = status
+      }
+      else {
+        autoidle = !autoidle
+      }
+
+      printOut('Autoidle is now', autoidle ? 'on' : 'off')
+      prompt()
+    },
+  },
+  connect: {
+    description: 'Connect to the MPD server.',
+    action() {
+      mpc.connect().then(res => {
+        printOut(res)
+        prompt()
+      }).catch(err => {
+        printErr(err)
+        prompt()
+      })
+    },
+  },
+  disconnect: {
+    description: 'Disconnect from the MPD server.',
+    action() {
+      mpc.disconnect()
+      prompt()
+    },
+  },
+  startlist: {
+    description: 'Starts collecting commands for a command list.',
+    action() {
       if (commandList != null) {
         printOut('Already collecting commands. End the previous list with /endlist.')
       }
       else {
         commandList = []
       }
-
       prompt()
-    }
-    else if (command === '/endlist') {
+    },
+  },
+  endlist: {
+    description: 'Ends collecting commands for a command list. Accepts one optional argument which specifies whether command_list_begin or command_list_ok_begin should be used.',
+    args: [Boolean],
+    action(ok) {
       if (commandList == null) {
         printOut('Not collecting commands. Start collecting with /startlist.')
         prompt()
       }
       else {
-        mpc.commandList(commandList, !args.length || args[0] === '1').then(res => {
+        mpc.commandList(commandList, ok == null || ok).then(res => {
           if (res && res.full != null) {
             printOut(res.full)
           }
@@ -109,41 +139,50 @@ rl.on('line', (command) => {
           prompt()
         })
       }
-    }
-    else if (command === '/autoidle') {
-      if (args.length) {
-        if (args[0] === '0') {
-          autoidle = false
-        }
-        else if (args[0] === '1') {
-          autoidle = true
-        }
-        else {
-          printOut('Invalid argument provided for /autoidle:', args)
-        }
-      }
-      else {
-        autoidle = !autoidle
-      }
+    },
+  },
+}
 
-      printOut('Autoidle is now', autoidle ? 'on' : 'off')
-      prompt()
-    }
-    else if (command === '/connect') {
-      mpc.connect().then(res => {
-        printOut(res)
-        prompt()
-      }).catch(err => {
-        printErr(err)
-        prompt()
-      })
-    }
-    else if (command == '/disconnect') {
-      mpc.disconnect()
-      prompt()
+rl.on('close', () => mpc.disconnect())
+rl.on('line', (command) => {
+  if (command === '') {
+    prompt()
+  }
+  else if (command.startsWith('/')) {
+    const args = command.split(' ')
+    command = args.shift().substring(1)
+    const commandObj = commands[command]
+
+    if (commandObj != null) {
+      if (commandObj.args != null) {
+        for (let i = 0, len = Math.min(commandObj.args.length, args.length); i < len; i += 1) {
+          const argType = commandObj.args[i]
+          let arg = args[i]
+
+          switch (argType) {
+            case Boolean:
+              if (arg === '0') {
+                args[i] = false
+              }
+              else if (arg === '1') {
+                args[i] = true
+              }
+              else {
+                printErr('Invalid argument "%s" supplied for "/%s"', arg, command)
+                prompt()
+                return
+              }
+              break;
+            case Number:
+              args[i] = parseFloat(arg)
+              break;
+          }
+        }
+      }
+      commandObj.action.apply(commandObj, args)
     }
     else {
-      printOut('Unknown command: "%s"', command)
+      printOut('Unknown command: "/%s"', command)
       prompt()
     }
   }
@@ -232,21 +271,76 @@ function prompt(preserveCursor) {
 
 function completer(line) {
   const possibilities = []
-  const commands = [
-    '/help',
-    '/connect',
-    '/disconnect',
-    '/exit',
-    '/autoidle',
-    '/startlist',
-    '/endlist',
-  ]
+  const keys = Object.keys(commands)
+  keys.sort()
 
-  for (const possibility of commands) {
+  for (let possibility of keys) {
+    possibility = '/' + possibility
     if (possibility.startsWith(line)) {
       possibilities.push(possibility)
     }
   }
 
   return [possibilities, line]
+}
+
+function printHelp() {
+  let colWidth = 0
+
+  for (const group of commandGroups) {
+    for (const command of group.commands) {
+      colWidth = Math.max(colWidth, 1 + command.length)
+    }
+  }
+
+  for (const group of commandGroups) {
+    printOut('%s:', group.name)
+    for (const command of group.commands) {
+      const paddedCommand = '  /' + command + Array(colWidth + 1 - command.length).join(' ') + ' - '
+      const maxLen = process.stdout.columns - paddedCommand.length
+
+      let description = commands[command].description
+      let descriptionLines = []
+
+      while (description.length > process.stdout.columns - paddedCommand.length) {
+        const lastSpace = description.substring(0, maxLen).lastIndexOf(' ')
+
+        if (lastSpace === -1) {
+          descriptionLines.push(description.substring(0, maxLen))
+          description = description.substring(maxLen)
+        }
+        else {
+          descriptionLines.push(description.substring(0, lastSpace))
+          description = description.substring(lastSpace + 1)
+        }
+      }
+
+      if (description.length) {
+        descriptionLines.push(description)
+      }
+
+      description = paddedCommand + descriptionLines.join('\n' + Array(paddedCommand.length + 1).join(' '))
+      printOut(description)
+    }
+    printOut('')
+  }
+
+  let trailing = 'See http://www.musicpd.org/doc/protocol/command_reference.html for the full MPD command reference.'
+
+  while (trailing.length > process.stdout.columns) {
+    const lastSpace = trailing.substring(0, process.stdout.columns).lastIndexOf(' ')
+
+    if (lastSpace === -1) {
+      printOut(trailing.substring(0, process.stdout.columns))
+      trailing = trailing.substring(process.stdout.columns)
+    }
+    else {
+      printOut(trailing.substring(0, lastSpace))
+      trailing = trailing.substring(lastSpace + 1)
+    }
+  }
+
+  if (trailing.length) {
+    printOut(trailing)
+  }
 }
