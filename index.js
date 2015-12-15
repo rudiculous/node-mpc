@@ -1,15 +1,14 @@
 'use strict'
 
-const events = require('events')
+const EventEmitter = require('events')
 const net = require('net')
 
-const $client = Symbol('client')
+// Keys for private properties.
 const $isIdle = Symbol('isIdle')
 const $netOpts = Symbol('netOpts')
 const $queue = Symbol('queue')
 
-// FIXME: Why can we not inherit from events?
-class MPClient {
+class MPClient extends EventEmitter {
 
   /**
    * @param {Object} netOpts Options that are passed to net.connect
@@ -17,17 +16,12 @@ class MPClient {
    * @see https://nodejs.org/api/net.html#net_net_connect_options_connectlistener
    */
   constructor(netOpts) {
-    this[$client] = null
+    super()
+
+    this.socket = null
     this[$isIdle] = false
     this[$netOpts] = netOpts
     this[$queue] = []
-
-    Object.defineProperty(this, 'events', {
-      configurable: false,
-      enumerable: true,
-      value: new events(),
-      writable: false,
-    })
   }
 
   /**
@@ -36,7 +30,7 @@ class MPClient {
    * @return {Boolean}
    */
   isConnected() {
-    return this[$client] != null && this[$client].readyState !== 'closed'
+    return this.socket != null && this.socket.readyState !== 'closed'
   }
 
   /**
@@ -53,14 +47,14 @@ class MPClient {
         this.disconnect()
       }
 
-      this[$client] = net.connect(this[$netOpts], () => this.events.on('ready', resolve))
-      this[$client].setEncoding('utf8')
+      this.socket = net.connect(this[$netOpts], () => this.on('ready', resolve))
+      this.socket.setEncoding('utf8')
 
-      this[$client].on('end', () => this.events.emit('end'))
-      this[$client].on('error', (err) => this.events.emit('error', err))
+      this.socket.on('end', () => this.emit('end'))
+      this.socket.on('error', (err) => this.emit('error', err))
 
       let buffer = ''
-      this[$client].on('data', (data) => {
+      this.socket.on('data', (data) => {
         this[$isIdle] = false
         data = buffer + data
         buffer = ''
@@ -77,7 +71,7 @@ class MPClient {
 
           if (isOK || isACK) {
             if (isOK && line.startsWith('OK MPD')) {
-              this.events.emit('ready', buffer + line)
+              this.emit('ready', buffer + line)
               buffer = ''
             }
             else {
@@ -98,7 +92,7 @@ class MPClient {
                 }
               }
               else {
-                this.events.emit('data', response)
+                this.emit('data', response)
               }
 
               if (response.data.changed != null) {
@@ -106,9 +100,9 @@ class MPClient {
                   ? response.data.changed
                   : [response.data.changed]
 
-                this.events.emit('changed', changed)
+                this.emit('changed', changed)
                 for (const event of changed) {
-                  this.events.emit('changed:' + event)
+                  this.emit('changed:' + event)
                 }
               }
             }
@@ -128,8 +122,8 @@ class MPClient {
    */
   disconnect() {
     if (this.isConnected()) {
-      this[$client].end()
-      this[$client] = null
+      this.socket.end()
+      this.socket = null
     }
   }
 
@@ -160,7 +154,7 @@ class MPClient {
 
       const that = this
       if (this[$isIdle] && command !== 'noidle') {
-        this[$client].write('noidle\n', 'utf8', () => {
+        this.socket.write('noidle\n', 'utf8', () => {
           this[$queue].push([execute, execute])
         })
       }
@@ -170,13 +164,13 @@ class MPClient {
 
       function execute() {
         if (command === 'idle') {
-          that[$client].write(command + '\n', 'utf8', () => {
+          that.socket.write(command + '\n', 'utf8', () => {
             that[$isIdle] = true
             resolve()
           })
         }
         else {
-          that[$client].write(command + '\n', 'utf8', () => that[$queue].push([resolve, reject]))
+          that.socket.write(command + '\n', 'utf8', () => that[$queue].push([resolve, reject]))
         }
       }
     })
@@ -229,7 +223,7 @@ class MPClient {
         const command = list[i]
         i += 1
 
-        that[$client].write(command, 'utf8', () => {
+        that.socket.write(command, 'utf8', () => {
           if (i < len) {
             executeNext()
           }

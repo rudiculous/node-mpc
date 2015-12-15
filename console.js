@@ -88,7 +88,7 @@ const commands = {
     description: 'Connect to the MPD server.',
     action() {
       mpc.connect().then(res => {
-        mpc.events.once('end', disconnectHandler)
+        mpc.once('end', disconnectHandler)
         printOut(res)
         prompt()
       }).catch(err => {
@@ -100,7 +100,7 @@ const commands = {
   disconnect: {
     description: 'Disconnect from the MPD server.',
     action() {
-      mpc.events.removeListener('end', disconnectHandler)
+      mpc.removeListener('end', disconnectHandler)
       mpc.disconnect()
       prompt()
     },
@@ -208,8 +208,8 @@ rl.on('line', (command) => {
   }
 })
 
-mpc.events.on('error', (err) => printErr('connection error:', err))
-mpc.events.on('data', (data) => {
+mpc.on('error', (err) => printErr('connection error:', err))
+mpc.on('data', (data) => {
   process.stdout.clearLine()
   process.stdout.cursorTo(0)
   printOut(data.full || data)

@@ -66,7 +66,7 @@ describe('#MPClient', function () {
     this.timeout(10000)
 
     mpc.then(mpc => {
-      mpc.events.once('data', data => {
+      mpc.once('data', data => {
         expect(data).to.deep.equal({
           data: {
             changed: ['player', 'mixer', 'database'],
@@ -94,7 +94,7 @@ describe('#MPClient', function () {
     this.timeout(10000)
 
     mpc.then(mpc => {
-      mpc.events.once('data', data => {
+      mpc.once('data', data => {
         done()
         endTest()
       })
