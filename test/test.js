@@ -340,6 +340,11 @@ function getMockServer() {
     })
 
     let idle = null
+    let idleResponseNr = 0
+    const idleResponses = [
+        'changed: player\nchanged: mixer\nchanged: database\nOK\n',
+        'changed: player\nOK\n',
+    ]
 
     server.on('error', reject)
     server.listen(function ready() {
@@ -376,7 +381,8 @@ function getMockServer() {
         else if (command === 'idle') {
           idle = setTimeout(function () {
             idle = null
-            socket.write('changed: player\nchanged: mixer\nchanged: database\nOK\n')
+            socket.write(idleResponses[idleResponseNr])
+            idleResponseNr = (idleResponseNr + 1) % idleResponses.length
           }, 500)
         }
         else if (command === 'noidle') {

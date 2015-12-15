@@ -99,6 +99,17 @@ class MPClient {
               else {
                 this.events.emit('data', response)
               }
+
+              if (response.data.changed != null) {
+                const changed = Array.isArray(response.data.changed)
+                  ? response.data.changed
+                  : [response.data.changed]
+
+                this.events.emit('changed', changed)
+                for (const event of changed) {
+                  this.events.emit('changed:' + event)
+                }
+              }
             }
           }
           else {
