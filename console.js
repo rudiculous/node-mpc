@@ -76,12 +76,9 @@ const commands = {
     description: 'Toggles audo idle. When auto idle is active, the idle command is sent after each command.',
     args: [Boolean],
     action(status) {
-      if (status != null) {
-        autoidle = status
-      }
-      else {
-        autoidle = !autoidle
-      }
+      autoidle = status == null
+        ? !autoidle
+        : status
 
       printOut('Autoidle is now', autoidle ? 'on' : 'off')
       prompt()
