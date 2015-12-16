@@ -265,7 +265,7 @@ function printErr(message) {
 
 function prompt(preserveCursor) {
   const promise = autoidle && mpc.isConnected()
-    ? mpc.command('idle')
+    ? mpc.idle()
     : dummyPromise
 
   return promise

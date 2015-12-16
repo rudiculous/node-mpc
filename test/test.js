@@ -79,7 +79,7 @@ describe('#MPClient', function () {
         endTest()
       })
 
-      mpc.command('idle').catch(err => {
+      mpc.idle().catch(err => {
         done(err)
         endTest()
       })
@@ -99,8 +99,8 @@ describe('#MPClient', function () {
         endTest()
       })
 
-      mpc.command('idle')
-        .then(() => mpc.command('idle'))
+      mpc.idle()
+        .then(() => mpc.idle())
         .catch(err => {
           done(err)
           endTest()
@@ -114,7 +114,7 @@ describe('#MPClient', function () {
   registerTest()
   it('goes out of idle mode when receiving the "noidle" command.', function (done) {
     mpc.then(mpc => {
-      mpc.command('idle')
+      mpc.idle()
         .then(() => mpc.command('noidle'))
         .then(response => {
           expect(response).to.deep.equal({
@@ -139,7 +139,7 @@ describe('#MPClient', function () {
   registerTest()
   it('leaves idle mode when receiving a command', function (done) {
     mpc.then(mpc => {
-      mpc.command('idle')
+      mpc.idle()
         .then(() => mpc.command('play'))
         .then(response => {
           expect(response).to.deep.equal({
@@ -172,7 +172,7 @@ describe('#MPClient', function () {
             full: 'list_OK\nlist_OK\nOK\n',
           })
         })
-        .then(() => mpc.command('idle'))
+        .then(() => mpc.idle())
         .then(() => mpc.commandList(['play', 'play'], false))
         .then(response => {
           expect(response).to.deep.equal({
@@ -277,6 +277,12 @@ describe('#MPClient', function () {
       mpc.disconnect()
 
       mpc.command('play')
+        .then(response => {
+          done(new Error('Received OK, expected connection error'))
+          endTest()
+        })
+        .catch(err => expect(err.message).to.equal('No active connection to write to.'))
+        .then(() => mpc.idle())
         .then(response => {
           done(new Error('Received OK, expected connection error'))
           endTest()

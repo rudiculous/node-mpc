@@ -3,10 +3,18 @@
 const EventEmitter = require('events')
 const net = require('net')
 
+const noop = require('@rdcl/noop')
+
 // Keys for private properties.
 const $isIdle = Symbol('isIdle')
 const $netOpts = Symbol('netOpts')
 const $queue = Symbol('queue')
+
+// A pre-rejected promise for when there is no connection available.
+const noConnectionAvailable = new Promise((resolve, reject) => {
+  reject(new Error('No active connection to write to.'))
+})
+
 
 class MPClient extends EventEmitter {
 
@@ -46,6 +54,8 @@ class MPClient extends EventEmitter {
       if (this.isConnected()) {
         this.disconnect()
       }
+
+      this[$isIdle] = false
 
       this.socket = net.connect(this[$netOpts], () => this.on('ready', resolve))
       this.socket.setEncoding('utf8')
@@ -128,6 +138,30 @@ class MPClient extends EventEmitter {
   }
 
   /**
+   * Sends the 'idle' command to MPD.
+   *
+   * @return {Promise}
+   */
+  idle() {
+    if (!this.isConnected()) {
+      return noConnectionAvailable
+    }
+
+    return new Promise((resolve, reject) => {
+      if (this[$isIdle]) {
+        // Already idle, nothing to do.
+        resolve()
+      }
+      else {
+        this.socket.write('idle\n', 'utf8', () => {
+          this[$isIdle] = true
+          resolve()
+        })
+      }
+    })
+  }
+
+  /**
    * Sends a command to MPD and waits for an answer.
    *
    * @param {String} command
@@ -136,47 +170,28 @@ class MPClient extends EventEmitter {
    * @see http://www.musicpd.org/doc/protocol/command_reference.html
    */
   command(command) {
+    if (!this.isConnected()) {
+      return noConnectionAvailable
+    }
+
     if (!command.endsWith('\n')) {
       command += '\n'
     }
 
     return new Promise((resolve, reject) => {
-      if (!this.isConnected()) {
-        reject(new Error('No active connection to write to.'))
-        return
+      let addedNoIdle = false
+      if (this[$isIdle] && !command.startsWith('noidle\n')) {
+        addedNoIdle = true
+        command = 'noidle\n' + command
       }
 
-      if (this[$isIdle] && command === 'idle\n') {
-        // Already idle, nothing to do.
-        resolve()
-        return
-      }
-
-      // TODO: Is there a possibility that this could insert commands in
-      //       the queue in the wrong order?
-      // TODO: Should we apply escaping to `command`?
-
-      const that = this
-      if (this[$isIdle] && command !== 'noidle\n') {
-        this.socket.write('noidle\n', 'utf8', () => {
-          this[$queue].push([execute, execute])
-        })
-      }
-      else {
-        execute()
-      }
-
-      function execute() {
-        if (command === 'idle\n') {
-          that.socket.write(command, 'utf8', () => {
-            that[$isIdle] = true
-            resolve()
-          })
+      this.socket.write(command, 'utf8', () => {
+        if (addedNoIdle) {
+          // Discard output from the noidle command.
+          this[$queue].push([noop, noop])
         }
-        else {
-          that.socket.write(command, 'utf8', () => that[$queue].push([resolve, reject]))
-        }
-      }
+        this[$queue].push([resolve, reject])
+      })
     })
   }
 
