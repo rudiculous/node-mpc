@@ -71,7 +71,7 @@ class MPClient extends EventEmitter {
 
           if (isOK || isACK) {
             if (isOK && line.startsWith('OK MPD')) {
-              this.emit('ready', buffer + line)
+              setImmediate(() => this.emit('ready', buffer + line))
               buffer = ''
             }
             else {
@@ -92,7 +92,7 @@ class MPClient extends EventEmitter {
                 }
               }
               else {
-                this.emit('data', response)
+                setImmediate(() => this.emit('data', response))
               }
 
               if (response.data.changed != null) {
@@ -100,9 +100,9 @@ class MPClient extends EventEmitter {
                   ? response.data.changed
                   : [response.data.changed]
 
-                this.emit('changed', changed)
+                setImmediate(() => this.emit('changed', changed))
                 for (const event of changed) {
-                  this.emit('changed:' + event)
+                  setImmediate(() => this.emit('changed:' + event))
                 }
               }
             }
