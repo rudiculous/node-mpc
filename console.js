@@ -6,9 +6,14 @@ const pjson = require('./package.json')
 const readline = require('readline')
 const util = require('util')
 const chalk = require('chalk')
+const moment = require('moment')
 
 const argv = require('yargs')
   .usage('Usage: $0 [options]')
+
+  .boolean('timestamps')
+  .describe('timestamps', 'Show timestamps')
+  .default('timestamps', false)
 
   .describe('host', 'The host MPD listens on.')
   .default('host', process.env.MPD_HOST || 'localhost')
@@ -223,8 +228,18 @@ console.log(
 prompt()
 
 
+function getTimestamp() {
+  if (argv.timestamps) {
+    return chalk.dim('[' + moment().format('HH:mm:ss') + ']') + ' '
+  }
+  else {
+    return ''
+  }
+}
+
 function printOut(message) {
   message = util.format.apply(util, arguments)
+  const timestamp = getTimestamp()
 
   if (message.endsWith('\n')) {
     message = message.substring(0, message.length - 1)
@@ -244,8 +259,9 @@ function printOut(message) {
     else if (message[i].startsWith('ACK')) {
       message[i] = chalk.red(message[i])
     }
-  }
 
+    message[i] = timestamp + message[i]
+  }
   message = message.join('\n')
 
   console.log(message)
@@ -253,12 +269,17 @@ function printOut(message) {
 
 function printErr(message) {
   message = util.format.apply(util, arguments)
+  const timestamp = getTimestamp()
 
   if (message.endsWith('\n')) {
     message = message.substring(0, message.length - 1)
   }
 
-  message = chalk.red(message)
+  message = message.split('\n')
+  for (let i = 0, len = message.length; i < len; i += 1) {
+    message[i] = timestamp + chalk.red(message[i])
+  }
+  message = message.join('\n')
 
   console.error(message)
 }
@@ -307,7 +328,7 @@ function printHelp() {
   }
 
   for (const group of commandGroups) {
-    printOut('%s:', group.name)
+    console.log('%s:', group.name)
     for (const command of group.commands) {
       const paddedCommand = '  /' + command + Array(colWidth + 1 - command.length).join(' ') + ' - '
       const maxLen = process.stdout.columns - paddedCommand.length
@@ -333,9 +354,9 @@ function printHelp() {
       }
 
       description = paddedCommand + descriptionLines.join('\n' + Array(paddedCommand.length + 1).join(' '))
-      printOut(description)
+      console.log(description)
     }
-    printOut('')
+    console.log('')
   }
 
   let trailing = 'See http://www.musicpd.org/doc/protocol/command_reference.html for the full MPD command reference.'
@@ -344,16 +365,16 @@ function printHelp() {
     const lastSpace = trailing.substring(0, process.stdout.columns).lastIndexOf(' ')
 
     if (lastSpace === -1) {
-      printOut(trailing.substring(0, process.stdout.columns))
+      console.log(trailing.substring(0, process.stdout.columns))
       trailing = trailing.substring(process.stdout.columns)
     }
     else {
-      printOut(trailing.substring(0, lastSpace))
+      console.log(trailing.substring(0, lastSpace))
       trailing = trailing.substring(lastSpace + 1)
     }
   }
 
   if (trailing.length) {
-    printOut(trailing)
+    console.log(trailing)
   }
 }

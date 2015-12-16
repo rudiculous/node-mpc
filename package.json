@@ -30,6 +30,7 @@
   "dependencies": {
     "@rdcl/noop": "^1.0.0",
     "chalk": "^1.1.1",
+    "moment": "^2.10.6",
     "yargs": "^3.31.0"
   }
 }
