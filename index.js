@@ -136,13 +136,17 @@ class MPClient extends EventEmitter {
    * @see http://www.musicpd.org/doc/protocol/command_reference.html
    */
   command(command) {
+    if (!command.endsWith('\n')) {
+      command += '\n'
+    }
+
     return new Promise((resolve, reject) => {
       if (!this.isConnected()) {
         reject(new Error('No active connection to write to.'))
         return
       }
 
-      if (this[$isIdle] && command === 'idle') {
+      if (this[$isIdle] && command === 'idle\n') {
         // Already idle, nothing to do.
         resolve()
         return
@@ -153,7 +157,7 @@ class MPClient extends EventEmitter {
       // TODO: Should we apply escaping to `command`?
 
       const that = this
-      if (this[$isIdle] && command !== 'noidle') {
+      if (this[$isIdle] && command !== 'noidle\n') {
         this.socket.write('noidle\n', 'utf8', () => {
           this[$queue].push([execute, execute])
         })
@@ -163,14 +167,14 @@ class MPClient extends EventEmitter {
       }
 
       function execute() {
-        if (command === 'idle') {
-          that.socket.write(command + '\n', 'utf8', () => {
+        if (command === 'idle\n') {
+          that.socket.write(command, 'utf8', () => {
             that[$isIdle] = true
             resolve()
           })
         }
         else {
-          that.socket.write(command + '\n', 'utf8', () => that[$queue].push([resolve, reject]))
+          that.socket.write(command, 'utf8', () => that[$queue].push([resolve, reject]))
         }
       }
     })
@@ -188,51 +192,11 @@ class MPClient extends EventEmitter {
   commandList(commands, listOk) {
     if (listOk == null) listOk = true
 
-    return new Promise((resolve, reject) => {
-      if (!this.isConnected()) {
-        reject(new Error('No active connection to write to.'))
-        return
-      }
+    let command = listOk ? 'command_list_ok_begin\n' : 'command_list_begin\n'
+    command += Array.from(commands).join('\n') + '\n'
+    command += 'command_list_end\n'
 
-      // TODO: Is there a possibility that this could insert commands in
-      //       the queue in the wrong order?
-      // TODO: Should we apply escaping to `command`?
-
-      const list = [listOk ? 'command_list_ok_begin\n' : 'command_list_begin\n']
-
-      for (const command of commands) {
-        list.push(command + '\n')
-      }
-
-      list.push('command_list_end\n')
-
-      const that = this
-      let i = 0
-      const len = list.length
-
-      if (this[$isIdle]) {
-        this.command('noidle')
-          .then(() => executeNext())
-          .catch(err => reject(err))
-      }
-      else {
-        executeNext()
-      }
-
-      function executeNext() {
-        const command = list[i]
-        i += 1
-
-        that.socket.write(command, 'utf8', () => {
-          if (i < len) {
-            executeNext()
-          }
-          else {
-            that[$queue].push([resolve, reject])
-          }
-        })
-      }
-    })
+    return this.command(command)
   }
 
 }
