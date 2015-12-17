@@ -28,8 +28,13 @@ const argv = require('yargs')
 
 const netOpts = {}
 if (argv.socket == null) {
-  netOpts.host = argv.host
-  netOpts.port = argv.port
+  if (argv.host.startsWith('/')) {
+    netOpts.path = argv.host
+  }
+  else {
+    netOpts.host = argv.host
+    netOpts.port = argv.port
+  }
 }
 else {
   netOpts.path = argv.socket
